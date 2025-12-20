@@ -1,0 +1,51 @@
+{
+  "name": "ffmpeg-napi-interface",
+  "version": "1.0.0",
+  "description": "Native FFmpeg interface for Node.js via NAPI - Direct access to libavformat, libavcodec, and libswresample for audio decoding",
+  "main": "lib/index.js",
+  "scripts": {
+    "setup": "node scripts/download-ffmpeg.js",
+    "postinstall": "npm run setup",
+    "configure": "node-gyp configure && node scripts/patch-vcxproj.js",
+    "build": "npm run configure && node-gyp build",
+    "build:debug": "npm run configure && node-gyp build --debug",
+    "rebuild": "node-gyp rebuild",
+    "clean": "node-gyp clean",
+    "test": "node test/decoder.test.js"
+  },
+  "keywords": [
+    "ffmpeg",
+    "audio",
+    "decoder",
+    "napi",
+    "native",
+    "libavformat",
+    "libavcodec",
+    "libswresample",
+    "streaming"
+  ],
+  "author": "David Renelt",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/herrbasan/ffmpeg-napi-interface.git"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": [
+    "win32",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "dependencies": {
+    "node-addon-api": "^8.0.0",
+    "speaker": "^0.5.5"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.0.0"
+  }
+}

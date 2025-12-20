@@ -26,6 +26,17 @@ Native Node.js addon providing direct access to FFmpeg libraries (libavformat, l
 - **FFmpeg** libraries: libavformat, libavcodec, libswresample, libavutil
 - **node-gyp** for building
 
+## Reference Project
+
+This project follows patterns from another NAPI project:
+- **Repository:** https://github.com/herrbasan/LibreHardwareMonitor_NativeNodeIntegration
+- **Key patterns to follow:**
+  - `binding.gyp` configuration for node-gyp
+  - JavaScript wrapper in `lib/index.js`
+  - Build scripts in `scripts/`
+  - Distribution folder structure in `dist/`
+  - MSVC v142 toolset patching for Windows builds
+
 ## Test Files
 
 The `testfiles/` directory contains various audio files for testing decoder functionality:
@@ -40,3 +51,13 @@ These files are used to verify that the decoder handles different audio formats 
 - Uses NAPI for stable ABI across Node.js versions
 - Pre-built binaries are committed to `dist/` for each platform
 - FFmpeg libraries are stored in `deps/` (not committed, downloaded during setup)
+
+## FFmpeg Binary Source
+
+FFmpeg shared libraries are downloaded from **[BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)**:
+- Daily auto-builds with `latest` tag for stable URLs
+- Use `gpl-shared` variant for full codec support + shared libraries
+- Packages:
+  - Windows: `ffmpeg-master-latest-win64-gpl-shared.zip`
+  - Linux: `ffmpeg-master-latest-linux64-gpl-shared.tar.xz`
+  - Linux ARM64: `ffmpeg-master-latest-linuxarm64-gpl-shared.tar.xz`
