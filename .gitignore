@@ -47,3 +47,5 @@ testfiles/
 # Logs
 logs/
 *.log
+
+prebuilds/

@@ -14,24 +14,40 @@ Native Node.js addon providing direct access to FFmpeg libraries for high-perfor
 
 ## Installation
 
-### From npm (Recommended)
+### From GitHub Releases (Recommended - No Compilation)
+
+Pre-built binaries are available for each release. They install automatically:
+
+```bash
+npm install github:herrbasan/ffmpeg-napi-interface
+```
+
+The install script will:
+1. Detect your platform (Windows/Linux) and architecture (x64/ARM64)
+2. Download matching pre-built binary from GitHub releases
+3. Extract to the correct location
+4. **Ready to use** - No compilation needed! ✅
+
+Supported platforms:
+- ✅ Windows x64
+- ✅ Linux x64
+- ✅ Linux ARM64
+
+### From npm (When Published)
 
 ```bash
 npm install ffmpeg-napi-interface
 ```
 
-Pre-built binaries are included for:
-- Windows x64
-- Linux x64
-- Linux ARM64
-
 ### From Source
+
+If pre-built binary is not available for your platform:
 
 ```bash
 git clone https://github.com/herrbasan/ffmpeg-napi-interface.git
 cd ffmpeg-napi-interface
-npm install
-npm run build
+npm install       # Downloads FFmpeg binaries
+npm run build     # Compiles native addon
 ```
 
 See [BUILD.md](docs/BUILD.md) for detailed build instructions.

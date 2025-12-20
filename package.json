@@ -4,14 +4,16 @@
   "description": "Native FFmpeg interface for Node.js via NAPI - Direct access to libavformat, libavcodec, and libswresample for audio decoding",
   "main": "lib/index.js",
   "scripts": {
+    "install": "node scripts/install-prebuilt.js || echo 'Pre-built binary not available'",
     "setup": "node scripts/download-ffmpeg.js",
-    "postinstall": "npm run setup",
     "configure": "node-gyp configure && node scripts/patch-vcxproj.js",
-    "build": "npm run configure && node-gyp build",
+    "build": "npm run setup && npm run configure && node-gyp build",
     "build:debug": "npm run configure && node-gyp build --debug",
     "rebuild": "node-gyp rebuild",
     "clean": "node-gyp clean",
-    "test": "node test/decoder.test.js"
+    "test": "node test/decoder.test.js",
+    "package": "node scripts/package-binary.js",
+    "prepublishOnly": "npm run build && npm run package"
   },
   "keywords": [
     "ffmpeg",
@@ -46,6 +48,7 @@
     "speaker": "^0.5.5"
   },
   "devDependencies": {
-    "node-gyp": "^10.0.0"
+    "node-gyp": "^10.0.0",
+    "tar": "^7.5.2"
   }
 }
