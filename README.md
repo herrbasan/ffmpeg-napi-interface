@@ -14,34 +14,57 @@ Native Node.js addon providing direct access to FFmpeg libraries for high-perfor
 
 ## Installation
 
-### From GitHub Releases (Recommended - No Compilation)
+### Option 1: Pre-Built Binaries (Recommended - No Compilation) ⚡
 
-Pre-built binaries are available for each release. They install automatically:
+Install directly from GitHub with automatic binary download:
 
 ```bash
 npm install github:herrbasan/ffmpeg-napi-interface
 ```
 
-The install script will:
-1. Detect your platform (Windows/Linux) and architecture (x64/ARM64)
-2. Download matching pre-built binary from GitHub releases
-3. Extract to the correct location
-4. **Ready to use** - No compilation needed! ✅
+**What happens:**
+1. Detects your platform (Windows/Linux) and architecture (x64)
+2. Downloads matching pre-built binary from latest GitHub release
+3. Extracts native addon + FFmpeg DLLs to correct location
+4. **Ready to use immediately** - No Visual Studio, no Python, no compilation! ✅
 
-Supported platforms:
+**Supported Platforms:**
 - ✅ Windows x64
 - ✅ Linux x64
-- ✅ Linux ARM64
 
-### From npm (When Published)
+If pre-built binary is not available for your platform, it will show a message and you can build from source (see below).
+
+### Option 2: Install from Specific Release
+
+To install a specific version:
 
 ```bash
-npm install ffmpeg-napi-interface
+# Install v1.0.0
+npm install https://github.com/herrbasan/ffmpeg-napi-interface/archive/refs/tags/v1.0.0.tar.gz
 ```
 
-### From Source
+Or download the binary manually:
 
-If pre-built binary is not available for your platform:
+1. Go to [Releases](https://github.com/herrbasan/ffmpeg-napi-interface/releases)
+2. Download the binary for your platform:
+   - `ffmpeg-napi-v1.0.0-win-x64.tar.gz` (Windows)
+   - `ffmpeg-napi-v1.0.0-linux-x64.tar.gz` (Linux)
+3. Extract the tarball:
+   ```bash
+   tar -xzf ffmpeg-napi-v1.0.0-win-x64.tar.gz
+   ```
+4. Copy contents to your project:
+   ```bash
+   # Create build directory
+   mkdir -p node_modules/ffmpeg-napi-interface/build/Release
+   
+   # Copy files
+   cp ffmpeg-napi-v1.0.0-win-x64/* node_modules/ffmpeg-napi-interface/build/Release/
+   ```
+
+### Option 3: Build from Source
+
+If you need to compile yourself (unsupported platform, custom modifications):
 
 ```bash
 git clone https://github.com/herrbasan/ffmpeg-napi-interface.git
@@ -49,6 +72,12 @@ cd ffmpeg-napi-interface
 npm install       # Downloads FFmpeg binaries
 npm run build     # Compiles native addon
 ```
+
+**Requirements for building:**
+- Node.js 16+
+- Python 3.x
+- **Windows:** Visual Studio 2022 with C++ build tools
+- **Linux:** GCC, make, build-essential
 
 See [BUILD.md](docs/BUILD.md) for detailed build instructions.
 
@@ -344,37 +373,38 @@ const result = decoder.read(88200);
 
 ## Deployment Strategies
 
-### 1. NPM Package (Recommended)
+### 1. Install from GitHub (Easiest - No Compilation)
 
-Publish with pre-built binaries:
+**For end users or projects using the library:**
 
-```json
-{
-  "name": "your-app",
-  "dependencies": {
-    "ffmpeg-napi-interface": "^1.0.0"
-  }
-}
+```bash
+npm install github:herrbasan/ffmpeg-napi-interface
 ```
 
-**Pros:**
-- Easy installation
-- Automatic platform detection
-- Pre-built binaries included
+This automatically downloads the pre-built binary for your platform. Works with:
+- Regular Node.js projects
+- Electron applications
+- Desktop apps
+
+**What you get:**
+- Native addon: `ffmpeg_napi.node`
+- FFmpeg libraries: `avformat-62.dll`, `avcodec-62.dll`, `avutil-60.dll`, `swresample-6.dll` (Windows)
+- Or equivalent `.so` files (Linux)
+- Total size: ~47 MB (Windows), ~50 MB (Linux)
 
 ### 2. Bundle with Electron App
 
-Include the native addon in your Electron app:
+**For Electron developers:**
 
 ```bash
-# Install in your Electron project
-npm install ffmpeg-napi-interface
+cd your-electron-app
+npm install github:herrbasan/ffmpeg-napi-interface
 
-# Electron will automatically rebuild for correct version
+# Rebuild for Electron (if needed)
 npx electron-rebuild
 ```
 
-**For electron-builder:**
+**electron-builder configuration:**
 
 ```json
 {
@@ -390,9 +420,47 @@ npx electron-rebuild
 }
 ```
 
-### 3. Custom Build
+This ensures the native addon and FFmpeg DLLs are extracted from ASAR archive and accessible at runtime.
 
-Build from source in your CI/CD:
+### 3. Verify Installation
+
+After installing, verify it works:
+
+```javascript
+const { FFmpegDecoder } = require('ffmpeg-napi-interface');
+
+const decoder = new FFmpegDecoder();
+console.log('✅ FFmpeg NAPI Interface loaded successfully!');
+```
+
+If you see the message, pre-built binary is working correctly.
+
+### 4. Manual Binary Installation
+
+If automatic download fails, install manually:
+
+**Step 1:** Download binary from [Releases](https://github.com/herrbasan/ffmpeg-napi-interface/releases)
+
+**Step 2:** Extract and copy:
+```bash
+# Windows
+tar -xzf ffmpeg-napi-v1.0.0-win-x64.tar.gz
+xcopy ffmpeg-napi-v1.0.0-win-x64\* node_modules\ffmpeg-napi-interface\build\Release\ /E /I
+
+# Linux
+tar -xzf ffmpeg-napi-v1.0.0-linux-x64.tar.gz
+mkdir -p node_modules/ffmpeg-napi-interface/build/Release
+cp -r ffmpeg-napi-v1.0.0-linux-x64/* node_modules/ffmpeg-napi-interface/build/Release/
+```
+
+**Step 3:** Test:
+```bash
+node -e "const {FFmpegDecoder} = require('ffmpeg-napi-interface'); console.log('✅ Works!')"
+```
+
+### 5. Custom Build and Deploy
+
+**For CI/CD or custom platforms:**
 
 ```bash
 # Clone and build
@@ -401,10 +469,62 @@ cd ffmpeg-napi-interface
 npm install
 npm run build
 
-# Copy to your project
-cp -r build/ ../your-project/native-addons/
-cp -r dist/ ../your-project/native-addons/
+# Package binary
+npm run package
+
+# Output: prebuilds/ffmpeg-napi-v1.0.0-{platform}-{arch}.tar.gz
+
+# Deploy to your infrastructure
+# Users can download and extract manually
 ```
+
+### Troubleshooting Installation
+
+**Error: "Cannot find module 'ffmpeg_napi.node'"**
+
+The native addon isn't in the right place:
+```bash
+# Check if it exists
+ls node_modules/ffmpeg-napi-interface/build/Release/
+
+# If missing, try manual installation or build from source
+npm run build
+```
+
+**Error: "Pre-built binary not available"**
+
+Your platform isn't supported or release doesn't have binary:
+```bash
+# Build from source
+npm run build
+```
+
+**Error: FFmpeg DLLs not found (Windows)**
+
+DLLs should be in same directory as `.node` file:
+```bash
+# Check DLLs exist
+ls node_modules/ffmpeg-napi-interface/build/Release/*.dll
+
+# Should see: avformat-62.dll, avcodec-62.dll, avutil-60.dll, swresample-6.dll
+```
+
+### Platform-Specific Notes
+
+**Windows:**
+- Pre-built binaries work on Windows 10/11 x64
+- No Visual Studio required for installation
+- FFmpeg DLLs (~130 MB) included in build folder
+
+**Linux:**
+- Pre-built binaries work on Ubuntu 20.04+ and compatible distros
+- Uses standard glibc, no special dependencies
+- Shared libraries (~140 MB) included
+
+**Electron:**
+- May need `electron-rebuild` if Electron version differs from build
+- Always unpack from ASAR archive
+- Works in both main and renderer process
 
 ## Platform Support
 
