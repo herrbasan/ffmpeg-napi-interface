@@ -1,8 +1,14 @@
 {
   "name": "ffmpeg-napi-interface",
   "version": "1.0.0",
-  "description": "Native FFmpeg interface for Node.js via NAPI - Direct access to libavformat, libavcodec, and libswresample for audio decoding",
+  "description": "Native FFmpeg interface for Node.js via NAPI - Direct access to libavformat, libavcodec, and libswresample for audio decoding with gapless looping support",
   "main": "lib/index.js",
+  "files": [
+    "lib/",
+    "prebuilds/",
+    "build/Release/*.node",
+    "deps/win/bin/*.dll"
+  ],
   "scripts": {
     "install": "node scripts/install-prebuilt.js || echo 'Pre-built binary not available'",
     "setup": "node scripts/download-ffmpeg.js",
@@ -19,12 +25,17 @@
     "ffmpeg",
     "audio",
     "decoder",
+    "player",
     "napi",
     "native",
     "libavformat",
     "libavcodec",
     "libswresample",
-    "streaming"
+    "streaming",
+    "gapless",
+    "looping",
+    "electron",
+    "audioworklet"
   ],
   "author": "David Renelt",
   "license": "MIT",

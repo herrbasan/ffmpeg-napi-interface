@@ -40,6 +40,13 @@ desktop.ini
 # Test files (audio samples)
 testfiles/
 
+# Archive
+archive/
+
+# Electron test environment
+electron_test/node_modules/
+electron_test/package-lock.json
+
 # Environment
 .env
 .env.local

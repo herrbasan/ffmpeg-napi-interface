@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>FFmpeg NAPI Interface - Test App</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #569cd6;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #858585;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .section {
+      background: #252526;
+      border: 1px solid #3e3e42;
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      color: #4ec9b0;
+      font-size: 18px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background: #0e639c;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #1177bb;
+    }
+
+    button:disabled {
+      background: #3e3e42;
+      color: #858585;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      background: #333333;
+    }
+
+    button.secondary:hover {
+      background: #444444;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .info-label {
+      color: #858585;
+      font-weight: 500;
+    }
+
+    .info-value {
+      color: #d4d4d4;
+      font-family: 'Consolas', monospace;
+    }
+
+    .progress-container {
+      background: #3e3e42;
+      border-radius: 4px;
+      height: 8px;
+      margin: 15px 0;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .progress-bar {
+      background: #0e639c;
+      height: 100%;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    .time-display {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #858585;
+      font-family: 'Consolas', monospace;
+      margin-top: 5px;
+    }
+
+    .volume-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      max-width: 200px;
+    }
+
+    .log-container {
+      background: #1e1e1e;
+      border: 1px solid #3e3e42;
+      border-radius: 4px;
+      padding: 15px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+    }
+
+    .log-entry {
+      margin-bottom: 5px;
+      line-height: 1.5;
+    }
+
+    .log-time {
+      color: #858585;
+    }
+
+    .log-info {
+      color: #4ec9b0;
+    }
+
+    .log-error {
+      color: #f48771;
+    }
+
+    .log-success {
+      color: #4ec9b0;
+    }
+
+    .status-bar {
+      background: #007acc;
+      color: white;
+      padding: 8px 15px;
+      border-radius: 4px;
+      font-size: 13px;
+      margin-bottom: 15px;
+      display: none;
+    }
+
+    .status-bar.show {
+      display: block;
+    }
+
+    .file-path {
+      background: #1e1e1e;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      color: #ce9178;
+      word-break: break-all;
+      margin-top: 10px;
+    }
+
+    .test-buttons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+
+    .mode-selector {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 15px;
+    }
+
+    .mode-selector button {
+      flex: 1;
+    }
+
+    .mode-selector button.active {
+      background: #0e639c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎵 FFmpeg NAPI Interface Test</h1>
+    <div class="subtitle">Electron test environment for native FFmpeg decoder</div>
+
+    <div class="status-bar" id="statusBar"></div>
+
+    <!-- File Selection -->
+    <div class="section">
+      <div class="section-title">File Selection</div>
+      <div class="controls">
+        <button id="selectFileBtn">Open Audio File</button>
+        <button id="closeFileBtn" disabled>Close File</button>
+      </div>
+      <div id="fileInfo" style="display: none;">
+        <div class="file-path" id="filePath"></div>
+        <div class="info-grid" style="margin-top: 15px;">
+          <div class="info-label">Duration:</div>
+          <div class="info-value" id="duration">--</div>
+          
+          <div class="info-label">Sample Rate:</div>
+          <div class="info-value" id="sampleRate">--</div>
+          
+          <div class="info-label">Channels:</div>
+          <div class="info-value" id="channels">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Playback Mode -->
+    <div class="section">
+      <div class="section-title">Playback Mode</div>
+      <div class="mode-selector">
+        <button id="modeStream" class="active">Streaming (AudioWorklet)</button>
+        <button id="modeBuffered">Buffered (Full decode)</button>
+      </div>
+    </div>
+
+    <!-- Playback Controls -->
+    <div class="section">
+      <div class="section-title">Playback Controls</div>
+      <div class="controls">
+        <button id="playBtn" disabled>▶ Play</button>
+        <button id="pauseBtn" disabled>⏸ Pause</button>
+        <button id="stopBtn" disabled>⏹ Stop</button>
+        <button id="loopBtn" disabled>🔁 Loop: OFF</button>
+      </div>
+
+      <div class="progress-container" id="progressContainer">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="time-display">
+        <span id="currentTime">0:00</span>
+        <span id="totalTime">0:00</span>
+      </div>
+
+      <div class="volume-control">
+        <span>🔊 Volume:</span>
+        <input type="range" id="volumeSlider" min="0" max="100" value="100">
+        <span id="volumeValue">100%</span>
+      </div>
+    </div>
+
+    <!-- Test Functions -->
+    <div class="section">
+      <div class="section-title">Test Functions</div>
+      <div class="test-buttons">
+        <button id="testSeekStart" disabled>Seek to Start</button>
+        <button id="testSeekMiddle" disabled>Seek to Middle</button>
+        <button id="testSeekEnd" disabled>Seek to End (−5s)</button>
+        <button id="testRead100ms" disabled>Read 100ms Samples</button>
+        <button id="testRead1s" disabled>Read 1s Samples</button>
+        <button id="testMultipleSeeks" disabled>Test Multiple Seeks</button>
+      </div>
+    </div>
+
+    <!-- Console Log -->
+    <div class="section">
+      <div class="section-title">Console Log</div>
+      <div class="log-container" id="logContainer">
+        <div class="log-entry">
+          <span class="log-time">[Ready]</span>
+          <span class="log-info">Test app initialized. Open an audio file to begin.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
