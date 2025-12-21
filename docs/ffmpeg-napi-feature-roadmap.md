@@ -4,7 +4,7 @@
 
 ---
 
-## Current Implementation (v1.0.0)
+## Current Implementation (v1.1.8)
 
 ✅ **Basic Decoder**
 - `open(filepath)` - Open audio file for decoding
@@ -15,6 +15,16 @@
 - `getSampleRate()` - Get sample rate
 - `getChannels()` - Get channel count
 
+✅ **Metadata Extraction**
+- `getMetadata()` - Extract metadata (title, artist, album, etc.)
+- Cover art extraction (JPEG/PNG)
+- Codec, bitrate, and format information
+
+✅ **Advanced Playback**
+- Gapless looping support
+- Precise seek clamping
+- EOF handling for continuous playback
+
 ---
 
 ## Phase 1: Replace FFmpeg CLI (SoundApp Requirements)
@@ -23,7 +33,7 @@ These features are needed to completely eliminate FFmpeg CLI usage in SoundApp.
 
 ### 1.1 Metadata Extraction (Replace ffprobe)
 
-**Priority: HIGH** - Currently using `ffprobe` subprocess
+**Status: ✅ IMPLEMENTED in v1.1.8**
 
 ```cpp
 // C++ API

@@ -39,19 +39,19 @@ If pre-built binary is not available for your platform, it will show a message a
 To install a specific version:
 
 ```bash
-# Install v1.0.0
-npm install https://github.com/herrbasan/ffmpeg-napi-interface/archive/refs/tags/v1.0.0.tar.gz
+# Install v1.1.8
+npm install https://github.com/herrbasan/ffmpeg-napi-interface/archive/refs/tags/v1.1.8.tar.gz
 ```
 
 Or download the binary manually:
 
 1. Go to [Releases](https://github.com/herrbasan/ffmpeg-napi-interface/releases)
 2. Download the binary for your platform:
-   - `ffmpeg-napi-v1.0.0-win-x64.tar.gz` (Windows)
-   - `ffmpeg-napi-v1.0.0-linux-x64.tar.gz` (Linux)
+   - `ffmpeg-napi-v1.1.8-win-x64.tar.gz` (Windows)
+   - `ffmpeg-napi-v1.1.8-linux-x64.tar.gz` (Linux)
 3. Extract the tarball:
    ```bash
-   tar -xzf ffmpeg-napi-v1.0.0-win-x64.tar.gz
+   tar -xzf ffmpeg-napi-v1.1.8-win-x64.tar.gz
    ```
 4. Copy contents to your project:
    ```bash
@@ -59,7 +59,7 @@ Or download the binary manually:
    mkdir -p node_modules/ffmpeg-napi-interface/build/Release
    
    # Copy files
-   cp ffmpeg-napi-v1.0.0-win-x64/* node_modules/ffmpeg-napi-interface/build/Release/
+   cp ffmpeg-napi-v1.1.8-win-x64/* node_modules/ffmpeg-napi-interface/build/Release/
    ```
 
 ### Option 3: Build from Source
