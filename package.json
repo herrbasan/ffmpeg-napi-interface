@@ -1,6 +1,6 @@
 {
   "name": "ffmpeg-napi-interface",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Native FFmpeg interface for Node.js via NAPI - Direct access to libavformat, libavcodec, and libswresample for audio decoding with gapless looping support",
   "main": "lib/index.js",
   "files": [
