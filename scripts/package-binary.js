@@ -56,6 +56,25 @@ if (!fs.existsSync(addonSource)) {
 console.log('📄 Copying native addon...');
 fs.copyFileSync(addonSource, addonDest);
 
+// Copy JavaScript library files
+const libSource = path.join(__dirname, '..', 'lib');
+const libDest = path.join(tempDir, 'lib');
+fs.mkdirSync(libDest, { recursive: true });
+
+const jsFiles = ['index.js', 'player.js', 'ffmpeg-worklet-processor.js'];
+console.log('📄 Copying JavaScript files...');
+for (const file of jsFiles) {
+    const src = path.join(libSource, file);
+    const dest = path.join(libDest, file);
+    
+    if (fs.existsSync(src)) {
+        fs.copyFileSync(src, dest);
+        console.log(`   ✓ ${file}`);
+    } else {
+        console.warn(`   ⚠ ${file} not found`);
+    }
+}
+
 // Copy FFmpeg DLLs/shared libraries
 const dllDir = path.join(tempDir, 'bin');
 fs.mkdirSync(dllDir, { recursive: true });
