@@ -2,6 +2,48 @@
 #include "decoder.h"
 #include <memory>
 
+// Helper to convert AudioMetadata to JS Object
+Napi::Object MetadataToJS(Napi::Env env, const AudioMetadata& meta) {
+    Napi::Object obj = Napi::Object::New(env);
+    
+    // Tags
+    obj.Set("title", Napi::String::New(env, meta.title));
+    obj.Set("artist", Napi::String::New(env, meta.artist));
+    obj.Set("album", Napi::String::New(env, meta.album));
+    obj.Set("albumArtist", Napi::String::New(env, meta.albumArtist));
+    obj.Set("genre", Napi::String::New(env, meta.genre));
+    obj.Set("date", Napi::String::New(env, meta.date));
+    obj.Set("comment", Napi::String::New(env, meta.comment));
+    obj.Set("trackNumber", Napi::Number::New(env, meta.trackNumber));
+    obj.Set("trackTotal", Napi::Number::New(env, meta.trackTotal));
+    obj.Set("discNumber", Napi::Number::New(env, meta.discNumber));
+    obj.Set("discTotal", Napi::Number::New(env, meta.discTotal));
+    
+    // Format info
+    obj.Set("codec", Napi::String::New(env, meta.codec));
+    obj.Set("codecLongName", Napi::String::New(env, meta.codecLongName));
+    obj.Set("format", Napi::String::New(env, meta.format));
+    obj.Set("formatLongName", Napi::String::New(env, meta.formatLongName));
+    obj.Set("duration", Napi::Number::New(env, meta.duration));
+    obj.Set("bitrate", Napi::Number::New(env, meta.bitrate));
+    obj.Set("sampleRate", Napi::Number::New(env, meta.sampleRate));
+    obj.Set("channels", Napi::Number::New(env, meta.channels));
+    obj.Set("bitsPerSample", Napi::Number::New(env, meta.bitsPerSample));
+    
+    // Cover art
+    if (!meta.coverArt.empty()) {
+        Napi::Buffer<uint8_t> coverBuf = Napi::Buffer<uint8_t>::Copy(
+            env, meta.coverArt.data(), meta.coverArt.size());
+        obj.Set("coverArt", coverBuf);
+        obj.Set("coverArtMimeType", Napi::String::New(env, meta.coverArtMimeType));
+    } else {
+        obj.Set("coverArt", env.Null());
+        obj.Set("coverArtMimeType", Napi::String::New(env, ""));
+    }
+    
+    return obj;
+}
+
 /**
  * NAPI Wrapper for FFmpegDecoder
  * Provides JavaScript interface to the native FFmpeg decoder
@@ -20,6 +62,7 @@ private:
     void Close(const Napi::CallbackInfo& info);
     Napi::Value Seek(const Napi::CallbackInfo& info);
     Napi::Value Read(const Napi::CallbackInfo& info);
+    Napi::Value GetMetadata(const Napi::CallbackInfo& info);
     
     // Properties
     Napi::Value GetDuration(const Napi::CallbackInfo& info);
@@ -27,6 +70,9 @@ private:
     Napi::Value GetChannels(const Napi::CallbackInfo& info);
     Napi::Value GetTotalSamples(const Napi::CallbackInfo& info);
     Napi::Value IsOpen(const Napi::CallbackInfo& info);
+    
+    // Static methods
+    static Napi::Value GetFileMetadata(const Napi::CallbackInfo& info);
 };
 
 DecoderWrapper::DecoderWrapper(const Napi::CallbackInfo& info) 
@@ -44,11 +90,13 @@ Napi::Object DecoderWrapper::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("close", &DecoderWrapper::Close),
         InstanceMethod("seek", &DecoderWrapper::Seek),
         InstanceMethod("read", &DecoderWrapper::Read),
+        InstanceMethod("getMetadata", &DecoderWrapper::GetMetadata),
         InstanceMethod("getDuration", &DecoderWrapper::GetDuration),
         InstanceMethod("getSampleRate", &DecoderWrapper::GetSampleRate),
         InstanceMethod("getChannels", &DecoderWrapper::GetChannels),
         InstanceMethod("getTotalSamples", &DecoderWrapper::GetTotalSamples),
-        InstanceMethod("isOpen", &DecoderWrapper::IsOpen)
+        InstanceMethod("isOpen", &DecoderWrapper::IsOpen),
+        StaticMethod("getFileMetadata", &DecoderWrapper::GetFileMetadata)
     });
     
     Napi::FunctionReference* constructor = new Napi::FunctionReference();
@@ -141,9 +189,50 @@ Napi::Value DecoderWrapper::IsOpen(const Napi::CallbackInfo& info) {
     return Napi::Boolean::New(env, decoder->isOpen());
 }
 
+Napi::Value DecoderWrapper::GetMetadata(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    
+    if (!decoder->isOpen()) {
+        Napi::Error::New(env, "Decoder is not open").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    
+    AudioMetadata meta = decoder->getMetadata();
+    return MetadataToJS(env, meta);
+}
+
+Napi::Value DecoderWrapper::GetFileMetadata(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "Expected string filePath").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    
+    std::string filePath = info[0].As<Napi::String>().Utf8Value();
+    AudioMetadata meta = FFmpegDecoder::getFileMetadata(filePath.c_str());
+    return MetadataToJS(env, meta);
+}
+
+// Standalone getMetadata function (same as FFmpegDecoder.getFileMetadata)
+Napi::Value GetMetadata(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "Expected string filePath").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    
+    std::string filePath = info[0].As<Napi::String>().Utf8Value();
+    AudioMetadata meta = FFmpegDecoder::getFileMetadata(filePath.c_str());
+    return MetadataToJS(env, meta);
+}
+
 // Module initialization
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    return DecoderWrapper::Init(env, exports);
+    DecoderWrapper::Init(env, exports);
+    exports.Set("getMetadata", Napi::Function::New(env, GetMetadata));
+    return exports;
 }
 
 NODE_API_MODULE(ffmpeg_napi, Init)

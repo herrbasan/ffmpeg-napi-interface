@@ -8,6 +8,45 @@ extern "C" {
 #include <libavutil/opt.h>
 }
 
+#include <string>
+#include <vector>
+
+/**
+ * AudioMetadata - All metadata from an audio file
+ */
+struct AudioMetadata {
+    // Tags
+    std::string title;
+    std::string artist;
+    std::string album;
+    std::string albumArtist;
+    std::string genre;
+    std::string date;
+    std::string comment;
+    int trackNumber;
+    int trackTotal;
+    int discNumber;
+    int discTotal;
+    
+    // Format info
+    std::string codec;
+    std::string codecLongName;
+    std::string format;
+    std::string formatLongName;
+    double duration;          // seconds
+    int bitrate;              // bits/sec
+    int sampleRate;           // original sample rate
+    int channels;             // original channel count
+    int bitsPerSample;        // for lossless formats
+    
+    // Cover art
+    std::vector<uint8_t> coverArt;    // JPEG/PNG bytes
+    std::string coverArtMimeType;
+    
+    AudioMetadata() : trackNumber(0), trackTotal(0), discNumber(0), discTotal(0),
+                      duration(0), bitrate(0), sampleRate(0), channels(0), bitsPerSample(0) {}
+};
+
 /**
  * FFmpegDecoder - High-performance audio decoder using FFmpeg libraries
  * 
@@ -40,6 +79,10 @@ private:
     int decodeNextFrame();
     void flushBuffers();
     
+    // Helper for metadata extraction
+    static std::string getTag(AVDictionary* dict, const char* key);
+    static int parseTrackNumber(const std::string& str, int* total);
+    
 public:
     FFmpegDecoder();
     ~FFmpegDecoder();
@@ -57,6 +100,10 @@ public:
     int getSampleRate() const { return OUTPUT_SAMPLE_RATE; }
     int getChannels() const { return OUTPUT_CHANNELS; }
     int64_t getTotalSamples() const;
+    
+    // Full metadata extraction
+    AudioMetadata getMetadata() const;
+    static AudioMetadata getFileMetadata(const char* filePath);
     
     // Status
     bool isOpen() const { return formatCtx != nullptr; }
