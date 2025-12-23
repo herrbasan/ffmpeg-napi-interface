@@ -49,6 +49,7 @@ private:
     static const int OUTPUT_CHANNELS = 2;
 
     int outputSampleRate;
+    int threadCount;
     
     bool initResampler();
     int decodeNextFrame();
@@ -59,7 +60,7 @@ public:
     ~FFmpegDecoder();
     
     // Lifecycle
-    bool open(const char* filePath, int outSampleRate = DEFAULT_OUTPUT_SAMPLE_RATE);
+    bool open(const char* filePath, int outSampleRate = DEFAULT_OUTPUT_SAMPLE_RATE, int threads = 0);
     void close();
     
     // Playback

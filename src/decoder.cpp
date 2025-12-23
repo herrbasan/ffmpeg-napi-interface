@@ -18,6 +18,7 @@ FFmpegDecoder::FFmpegDecoder()
     , decoderDrained(false)
     , resamplerDrained(false)
     , outputSampleRate(DEFAULT_OUTPUT_SAMPLE_RATE)
+    , threadCount(0)
 {
     packet = av_packet_alloc();
     frame = av_frame_alloc();
@@ -29,8 +30,9 @@ FFmpegDecoder::~FFmpegDecoder() {
     if (frame) av_frame_free(&frame);
 }
 
-bool FFmpegDecoder::open(const char* filePath, int outSampleRate) {
+bool FFmpegDecoder::open(const char* filePath, int outSampleRate, int threads) {
     outputSampleRate = (outSampleRate > 0) ? outSampleRate : DEFAULT_OUTPUT_SAMPLE_RATE;
+    threadCount = threads;
 
     // Open input file
     if (avformat_open_input(&formatCtx, filePath, nullptr, nullptr) < 0) {
@@ -80,6 +82,12 @@ bool FFmpegDecoder::open(const char* filePath, int outSampleRate) {
         avformat_close_input(&formatCtx);
         return false;
     }
+    
+    // Configure threading (0 = auto-detect, >0 = specific thread count)
+    if (threadCount > 0) {
+        codecCtx->thread_count = threadCount;
+    }
+    codecCtx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     
     // Open codec
     if (avcodec_open2(codecCtx, codec, nullptr) < 0) {

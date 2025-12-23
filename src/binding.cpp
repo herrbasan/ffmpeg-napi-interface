@@ -123,7 +123,20 @@ Napi::Value DecoderWrapper::Open(const Napi::CallbackInfo& info) {
         }
     }
 
-    bool success = decoder->open(filePath.c_str(), outSampleRate);
+    int threads = 0;
+    if (info.Length() >= 3 && !info[2].IsUndefined() && !info[2].IsNull()) {
+        if (!info[2].IsNumber()) {
+            Napi::TypeError::New(env, "Expected number threads").ThrowAsJavaScriptException();
+            return env.Null();
+        }
+        threads = info[2].As<Napi::Number>().Int32Value();
+        if (threads < 0) {
+            Napi::RangeError::New(env, "threads must be >= 0").ThrowAsJavaScriptException();
+            return env.Null();
+        }
+    }
+
+    bool success = decoder->open(filePath.c_str(), outSampleRate, threads);
     
     return Napi::Boolean::New(env, success);
 }
