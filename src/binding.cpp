@@ -109,8 +109,21 @@ Napi::Value DecoderWrapper::Open(const Napi::CallbackInfo& info) {
     }
     
     std::string filePath = info[0].As<Napi::String>().Utf8Value();
-    
-    bool success = decoder->open(filePath.c_str());
+
+    int outSampleRate = 0;
+    if (info.Length() >= 2 && !info[1].IsUndefined() && !info[1].IsNull()) {
+        if (!info[1].IsNumber()) {
+            Napi::TypeError::New(env, "Expected number outputSampleRate").ThrowAsJavaScriptException();
+            return env.Null();
+        }
+        outSampleRate = info[1].As<Napi::Number>().Int32Value();
+        if (outSampleRate <= 0) {
+            Napi::RangeError::New(env, "outputSampleRate must be > 0").ThrowAsJavaScriptException();
+            return env.Null();
+        }
+    }
+
+    bool success = decoder->open(filePath.c_str(), outSampleRate);
     
     return Napi::Boolean::New(env, success);
 }

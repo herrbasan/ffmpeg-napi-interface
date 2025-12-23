@@ -44,9 +44,11 @@ private:
     static std::string getTag(AVDictionary* dict, const char* key);
     static int parseTrackNumber(const std::string& str, int* total);
     
-    // Output format (fixed)
-    static const int OUTPUT_SAMPLE_RATE = 44100;
+    // Output format (per-instance sample rate, fixed stereo)
+    static const int DEFAULT_OUTPUT_SAMPLE_RATE = 44100;
     static const int OUTPUT_CHANNELS = 2;
+
+    int outputSampleRate;
     
     bool initResampler();
     int decodeNextFrame();
@@ -57,7 +59,7 @@ public:
     ~FFmpegDecoder();
     
     // Lifecycle
-    bool open(const char* filePath);
+    bool open(const char* filePath, int outSampleRate = DEFAULT_OUTPUT_SAMPLE_RATE);
     void close();
     
     // Playback
@@ -66,7 +68,7 @@ public:
     
     // Metadata
     double getDuration() const;
-    int getSampleRate() const { return OUTPUT_SAMPLE_RATE; }
+    int getSampleRate() const { return outputSampleRate; }
     int getChannels() const { return OUTPUT_CHANNELS; }
     int64_t getTotalSamples() const;
 

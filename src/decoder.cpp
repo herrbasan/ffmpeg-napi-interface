@@ -17,6 +17,7 @@ FFmpegDecoder::FFmpegDecoder()
     , eofSignaled(false)
     , decoderDrained(false)
     , resamplerDrained(false)
+    , outputSampleRate(DEFAULT_OUTPUT_SAMPLE_RATE)
 {
     packet = av_packet_alloc();
     frame = av_frame_alloc();
@@ -28,7 +29,9 @@ FFmpegDecoder::~FFmpegDecoder() {
     if (frame) av_frame_free(&frame);
 }
 
-bool FFmpegDecoder::open(const char* filePath) {
+bool FFmpegDecoder::open(const char* filePath, int outSampleRate) {
+    outputSampleRate = (outSampleRate > 0) ? outSampleRate : DEFAULT_OUTPUT_SAMPLE_RATE;
+
     // Open input file
     if (avformat_open_input(&formatCtx, filePath, nullptr, nullptr) < 0) {
         return false;
@@ -92,7 +95,7 @@ bool FFmpegDecoder::open(const char* filePath) {
     }
     
     // Allocate sample buffer (1 second of audio)
-    sampleBufferSize = OUTPUT_SAMPLE_RATE * OUTPUT_CHANNELS;
+    sampleBufferSize = outputSampleRate * OUTPUT_CHANNELS;
     sampleBuffer = new float[sampleBufferSize];
 
     eofSignaled = false;
@@ -120,7 +123,7 @@ bool FFmpegDecoder::initResampler() {
         &swrCtx,
         &out_ch_layout,                // Output channel layout
         AV_SAMPLE_FMT_FLT,             // Output sample format (float32)
-        OUTPUT_SAMPLE_RATE,            // Output sample rate
+        outputSampleRate,              // Output sample rate
         &in_ch_layout,                 // Input channel layout
         codecCtx->sample_fmt,          // Input sample format
         codecCtx->sample_rate,         // Input sample rate
@@ -329,7 +332,7 @@ double FFmpegDecoder::getDuration() const {
 }
 
 int64_t FFmpegDecoder::getTotalSamples() const {
-    return static_cast<int64_t>(getDuration() * OUTPUT_SAMPLE_RATE);
+    return static_cast<int64_t>(getDuration() * outputSampleRate);
 }
 
 bool FFmpegDecoder::hasError() const {
