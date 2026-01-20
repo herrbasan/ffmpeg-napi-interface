@@ -45,7 +45,8 @@
             "-lavformat",
             "-lavcodec",
             "-lavutil",
-            "-lswresample"
+            "-lswresample",
+            "-lavfilter"
           ],
           "copies": [
             {
@@ -54,7 +55,8 @@
                 "<(module_root_dir)/deps/win/bin/avformat-62.dll",
                 "<(module_root_dir)/deps/win/bin/avcodec-62.dll",
                 "<(module_root_dir)/deps/win/bin/avutil-60.dll",
-                "<(module_root_dir)/deps/win/bin/swresample-6.dll"
+                "<(module_root_dir)/deps/win/bin/swresample-6.dll",
+                "<(module_root_dir)/deps/win/bin/avfilter-11.dll"
               ]
             }
           ]
@@ -73,7 +75,8 @@
               "-lavformat",
               "-lavcodec",
               "-lavutil",
-              "-lswresample"
+              "-lswresample",
+              "-lavfilter"
             ]
           }
         }]

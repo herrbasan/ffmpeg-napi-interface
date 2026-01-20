@@ -2,6 +2,7 @@
 #include <cstring>
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 
 FFmpegDecoder::FFmpegDecoder() 
     : formatCtx(nullptr)
@@ -10,6 +11,14 @@ FFmpegDecoder::FFmpegDecoder()
     , packet(nullptr)
     , frame(nullptr)
     , audioStreamIndex(-1)
+    , filterGraph(nullptr)
+    , bufferSrcCtx(nullptr)
+    , bufferSinkCtx(nullptr)
+    , filteredFrame(nullptr)
+    , filtersEnabled(false)
+    , pitchShift(0.0)
+    , timeStretch(1.0)
+    , filterPts(0)
     , sampleBuffer(nullptr)
     , sampleBufferSize(0)
     , samplesInBuffer(0)
@@ -22,12 +31,14 @@ FFmpegDecoder::FFmpegDecoder()
 {
     packet = av_packet_alloc();
     frame = av_frame_alloc();
+    filteredFrame = av_frame_alloc();
 }
 
 FFmpegDecoder::~FFmpegDecoder() {
     close();
     if (packet) av_packet_free(&packet);
     if (frame) av_frame_free(&frame);
+    if (filteredFrame) av_frame_free(&filteredFrame);
 }
 
 bool FFmpegDecoder::open(const char* filePath, int outSampleRate, int threads) {
@@ -155,6 +166,8 @@ void FFmpegDecoder::close() {
     delete[] sampleBuffer;
     sampleBuffer = nullptr;
     
+    closeFilters();
+    
     if (swrCtx) {
         swr_free(&swrCtx);
         swrCtx = nullptr;
@@ -208,6 +221,9 @@ bool FFmpegDecoder::seek(double seconds) {
     samplesInBuffer = 0;
     bufferReadPos = 0;
 
+    // Reset filter PTS
+    filterPts = 0;
+
     // Reset EOF/drain state
     eofSignaled = false;
     decoderDrained = false;
@@ -218,9 +234,47 @@ bool FFmpegDecoder::seek(double seconds) {
 
 int FFmpegDecoder::decodeNextFrame() {
     while (true) {
-        // 1) First, try to receive any pending decoded frame (codec can output multiple frames per packet)
+        // If filters are enabled, try to get filtered frames first
+        if (filtersEnabled && bufferSinkCtx) {
+            int ret = av_buffersink_get_frame(bufferSinkCtx, filteredFrame);
+            if (ret >= 0) {
+                uint8_t* output_buffer = reinterpret_cast<uint8_t*>(sampleBuffer);
+                int out_samples = swr_convert(
+                    swrCtx,
+                    &output_buffer,
+                    sampleBufferSize / OUTPUT_CHANNELS,
+                    const_cast<const uint8_t**>(filteredFrame->data),
+                    filteredFrame->nb_samples
+                );
+                av_frame_unref(filteredFrame);
+                
+                if (out_samples < 0) return -1;
+                
+                samplesInBuffer = out_samples * OUTPUT_CHANNELS;
+                bufferReadPos = 0;
+                return samplesInBuffer;
+            } else if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+                return -1;
+            }
+        }
+        
+        // Get decoded frame from codec
         int ret = avcodec_receive_frame(codecCtx, frame);
         if (ret == 0) {
+            // If filters enabled, push frame to filter graph
+            if (filtersEnabled && bufferSrcCtx && bufferSinkCtx) {
+                frame->pts = filterPts;
+                filterPts += frame->nb_samples;
+                ret = av_buffersrc_add_frame_flags(bufferSrcCtx, frame, AV_BUFFERSRC_FLAG_KEEP_REF);
+                av_frame_unref(frame);
+                
+                if (ret < 0) return -1;
+                
+                // Loop back to try getting filtered output
+                continue;
+            }
+            
+            // No filters - resample directly
             uint8_t* output_buffer = reinterpret_cast<uint8_t*>(sampleBuffer);
             int out_samples = swr_convert(
                 swrCtx,
@@ -230,6 +284,7 @@ int FFmpegDecoder::decodeNextFrame() {
                 frame->nb_samples
             );
             av_frame_unref(frame);
+            
             if (out_samples < 0) return -1;
 
             samplesInBuffer = out_samples * OUTPUT_CHANNELS;
@@ -525,4 +580,173 @@ FFmpegDecoder::AudioMetadata FFmpegDecoder::getFileMetadata(const char* filePath
 
     avformat_close_input(&fmtCtx);
     return meta;
+}
+
+bool FFmpegDecoder::initFilters() {
+    closeFilters();
+    
+    if (!codecCtx) return false;
+    
+    filterGraph = avfilter_graph_alloc();
+    if (!filterGraph) return false;
+    
+    char args[512];
+    snprintf(args, sizeof(args),
+        "time_base=%d/%d:sample_rate=%d:sample_fmt=%s:channel_layout=stereo",
+        1, codecCtx->sample_rate,
+        codecCtx->sample_rate,
+        av_get_sample_fmt_name(codecCtx->sample_fmt));
+    
+    const AVFilter* bufferSrc = avfilter_get_by_name("abuffer");
+    int ret = avfilter_graph_create_filter(&bufferSrcCtx, bufferSrc, "in",
+                                           args, nullptr, filterGraph);
+    if (ret < 0) {
+        closeFilters();
+        return false;
+    }
+    
+    const AVFilter* bufferSink = avfilter_get_by_name("abuffersink");
+    ret = avfilter_graph_create_filter(&bufferSinkCtx, bufferSink, "out",
+                                       nullptr, nullptr, filterGraph);
+    if (ret < 0) {
+        closeFilters();
+        return false;
+    }
+    
+    AVFilterContext* lastFilter = bufferSrcCtx;
+    AVFilterContext* currentFilter = nullptr;
+    
+    if (timeStretch != 1.0 || pitchShift != 0.0) {
+        const AVFilter* rubberband = avfilter_get_by_name("rubberband");
+        if (rubberband) {
+            double pitchRatio = pow(2.0, pitchShift / 12.0);
+            char rubberbandArgs[256];
+            snprintf(rubberbandArgs, sizeof(rubberbandArgs), 
+                "tempo=%f:pitch=%f", timeStretch, pitchRatio);
+            
+            ret = avfilter_graph_create_filter(&currentFilter, rubberband, "rubberband",
+                                              rubberbandArgs, nullptr, filterGraph);
+            if (ret >= 0) {
+                ret = avfilter_link(lastFilter, 0, currentFilter, 0);
+                if (ret >= 0) {
+                    lastFilter = currentFilter;
+                }
+            }
+        }
+        
+        if (ret < 0) {
+            double atempoRate = timeStretch;
+            if (atempoRate < 0.5) atempoRate = 0.5;
+            if (atempoRate > 2.0) atempoRate = 2.0;
+            
+            const AVFilter* atempo = avfilter_get_by_name("atempo");
+            if (atempo) {
+                char atempoArgs[64];
+                snprintf(atempoArgs, sizeof(atempoArgs), "tempo=%f", atempoRate);
+                
+                ret = avfilter_graph_create_filter(&currentFilter, atempo, "atempo",
+                                                  atempoArgs, nullptr, filterGraph);
+                if (ret >= 0) {
+                    ret = avfilter_link(lastFilter, 0, currentFilter, 0);
+                    if (ret >= 0) {
+                        lastFilter = currentFilter;
+                    }
+                }
+            }
+        }
+    }
+    
+    ret = avfilter_link(lastFilter, 0, bufferSinkCtx, 0);
+    if (ret < 0) {
+        closeFilters();
+        return false;
+    }
+    
+    ret = avfilter_graph_config(filterGraph, nullptr);
+    if (ret < 0) {
+        closeFilters();
+        return false;
+    }
+    
+    filtersEnabled = true;
+    return true;
+}
+
+void FFmpegDecoder::closeFilters() {
+    // Flush filter graph before closing to clear internal buffers (rubberband, etc.)
+    if (bufferSrcCtx && bufferSinkCtx && filteredFrame) {
+        // Send NULL frame to signal EOF and drain filter
+        av_buffersrc_add_frame_flags(bufferSrcCtx, nullptr, 0);
+        // Pull and discard all remaining filtered frames using a temporary frame
+        AVFrame* drainFrame = av_frame_alloc();
+        while (av_buffersink_get_frame(bufferSinkCtx, drainFrame) >= 0) {
+            av_frame_unref(drainFrame);
+        }
+        av_frame_free(&drainFrame);
+    }
+    
+    if (filteredFrame) {
+        av_frame_unref(filteredFrame);
+    }
+    if (filterGraph) {
+        avfilter_graph_free(&filterGraph);
+        filterGraph = nullptr;
+    }
+    bufferSrcCtx = nullptr;
+    bufferSinkCtx = nullptr;
+    filtersEnabled = false;
+}
+
+bool FFmpegDecoder::setPitchShift(double semitones) {
+    if (semitones < -12.0) semitones = -12.0;
+    if (semitones > 12.0) semitones = 12.0;
+    
+    pitchShift = semitones;
+    
+    // Clear buffers to apply change immediately
+    samplesInBuffer = 0;
+    bufferReadPos = 0;
+    filterPts = 0;
+    
+    if (codecCtx && (pitchShift != 0.0 || timeStretch != 1.0)) {
+        // Flush codec and resampler
+        avcodec_flush_buffers(codecCtx);
+        if (frame) av_frame_unref(frame);
+        if (filteredFrame) av_frame_unref(filteredFrame);
+        if (swrCtx) {
+            swr_close(swrCtx);
+            swr_init(swrCtx);
+        }
+        return initFilters();
+    }
+    
+    closeFilters();
+    return true;
+}
+
+bool FFmpegDecoder::setTimeStretch(double rate) {
+    if (rate < 0.25) rate = 0.25;
+    if (rate > 4.0) rate = 4.0;
+    
+    timeStretch = rate;
+    
+    // Clear buffers to apply change immediately
+    samplesInBuffer = 0;
+    bufferReadPos = 0;
+    filterPts = 0;
+    
+    if (codecCtx && (pitchShift != 0.0 || timeStretch != 1.0)) {
+        // Flush codec and resampler
+        avcodec_flush_buffers(codecCtx);
+        if (frame) av_frame_unref(frame);
+        if (filteredFrame) av_frame_unref(filteredFrame);
+        if (swrCtx) {
+            swr_close(swrCtx);
+            swr_init(swrCtx);
+        }
+        return initFilters();
+    }
+    
+    closeFilters();
+    return true;
 }

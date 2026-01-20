@@ -58,6 +58,10 @@ private:
     Napi::Value Seek(const Napi::CallbackInfo& info);
     Napi::Value Read(const Napi::CallbackInfo& info);
     Napi::Value GetMetadata(const Napi::CallbackInfo& info);
+    Napi::Value SetPitchShift(const Napi::CallbackInfo& info);
+    Napi::Value SetTimeStretch(const Napi::CallbackInfo& info);
+    Napi::Value GetPitchShift(const Napi::CallbackInfo& info);
+    Napi::Value GetTimeStretch(const Napi::CallbackInfo& info);
     
     // Properties
     Napi::Value GetDuration(const Napi::CallbackInfo& info);
@@ -84,6 +88,10 @@ Napi::Object DecoderWrapper::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("seek", &DecoderWrapper::Seek),
         InstanceMethod("read", &DecoderWrapper::Read),
         InstanceMethod("getMetadata", &DecoderWrapper::GetMetadata),
+        InstanceMethod("setPitchShift", &DecoderWrapper::SetPitchShift),
+        InstanceMethod("setTimeStretch", &DecoderWrapper::SetTimeStretch),
+        InstanceMethod("getPitchShift", &DecoderWrapper::GetPitchShift),
+        InstanceMethod("getTimeStretch", &DecoderWrapper::GetTimeStretch),
         InstanceMethod("getDuration", &DecoderWrapper::GetDuration),
         InstanceMethod("getSampleRate", &DecoderWrapper::GetSampleRate),
         InstanceMethod("getChannels", &DecoderWrapper::GetChannels),
@@ -231,6 +239,44 @@ Napi::Value DecoderWrapper::GetFileMetadata(const Napi::CallbackInfo& info) {
     std::string filePath = info[0].As<Napi::String>().Utf8Value();
     FFmpegDecoder::AudioMetadata meta = FFmpegDecoder::getFileMetadata(filePath.c_str());
     return MetadataToJS(env, meta);
+}
+
+Napi::Value DecoderWrapper::SetPitchShift(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        Napi::TypeError::New(env, "Expected number semitones").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    
+    double semitones = info[0].As<Napi::Number>().DoubleValue();
+    bool success = decoder->setPitchShift(semitones);
+    
+    return Napi::Boolean::New(env, success);
+}
+
+Napi::Value DecoderWrapper::SetTimeStretch(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        Napi::TypeError::New(env, "Expected number rate").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    
+    double rate = info[0].As<Napi::Number>().DoubleValue();
+    bool success = decoder->setTimeStretch(rate);
+    
+    return Napi::Boolean::New(env, success);
+}
+
+Napi::Value DecoderWrapper::GetPitchShift(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    return Napi::Number::New(env, decoder->getPitchShift());
+}
+
+Napi::Value DecoderWrapper::GetTimeStretch(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    return Napi::Number::New(env, decoder->getTimeStretch());
 }
 
 static Napi::Value GetMetadata(const Napi::CallbackInfo& info) {

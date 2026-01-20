@@ -5,6 +5,9 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libswresample/swresample.h>
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersrc.h>
+#include <libavfilter/buffersink.h>
 #include <libavutil/opt.h>
 }
 
@@ -29,6 +32,16 @@ private:
     AVFrame* frame;
     int audioStreamIndex;
     
+    // Filter graph for time/pitch manipulation
+    AVFilterGraph* filterGraph;
+    AVFilterContext* bufferSrcCtx;
+    AVFilterContext* bufferSinkCtx;
+    AVFrame* filteredFrame;
+    bool filtersEnabled;
+    double pitchShift;     // In semitones (-12 to +12)
+    double timeStretch;    // Playback rate (0.25 to 4.0)
+    int64_t filterPts;      // PTS counter for filter input (in samples)
+    
     // Decoded sample buffer (interleaved float32 stereo)
     float* sampleBuffer;
     int sampleBufferSize;     // Total capacity in samples
@@ -43,6 +56,8 @@ private:
     // Metadata helpers
     static std::string getTag(AVDictionary* dict, const char* key);
     static int parseTrackNumber(const std::string& str, int* total);
+    bool initFilters();
+    void closeFilters();
     
     // Output format (per-instance sample rate, fixed stereo)
     static const int DEFAULT_OUTPUT_SAMPLE_RATE = 44100;
@@ -66,6 +81,12 @@ public:
     // Playback
     bool seek(double seconds);
     int read(float* outBuffer, int numSamples);
+    
+    // Time/Pitch manipulation
+    bool setPitchShift(double semitones);
+    bool setTimeStretch(double rate);
+    double getPitchShift() const { return pitchShift; }
+    double getTimeStretch() const { return timeStretch; }
     
     // Metadata
     double getDuration() const;
