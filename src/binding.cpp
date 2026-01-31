@@ -1,6 +1,8 @@
 #include <napi.h>
 #include "decoder.h"
 #include <memory>
+#include <algorithm>
+#include <vector>
 
 static Napi::Object MetadataToJS(Napi::Env env, const FFmpegDecoder::AudioMetadata& meta) {
     Napi::Object obj = Napi::Object::New(env);
@@ -62,6 +64,8 @@ private:
     Napi::Value SetTimeStretch(const Napi::CallbackInfo& info);
     Napi::Value GetPitchShift(const Napi::CallbackInfo& info);
     Napi::Value GetTimeStretch(const Napi::CallbackInfo& info);
+    Napi::Value GetWaveform(const Napi::CallbackInfo& info);
+    Napi::Value GetWaveformStreaming(const Napi::CallbackInfo& info);
     
     // Properties
     Napi::Value GetDuration(const Napi::CallbackInfo& info);
@@ -92,6 +96,8 @@ Napi::Object DecoderWrapper::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("setTimeStretch", &DecoderWrapper::SetTimeStretch),
         InstanceMethod("getPitchShift", &DecoderWrapper::GetPitchShift),
         InstanceMethod("getTimeStretch", &DecoderWrapper::GetTimeStretch),
+        InstanceMethod("getWaveform", &DecoderWrapper::GetWaveform),
+        InstanceMethod("getWaveformStreaming", &DecoderWrapper::GetWaveformStreaming),
         InstanceMethod("getDuration", &DecoderWrapper::GetDuration),
         InstanceMethod("getSampleRate", &DecoderWrapper::GetSampleRate),
         InstanceMethod("getChannels", &DecoderWrapper::GetChannels),
@@ -277,6 +283,87 @@ Napi::Value DecoderWrapper::GetPitchShift(const Napi::CallbackInfo& info) {
 Napi::Value DecoderWrapper::GetTimeStretch(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     return Napi::Number::New(env, decoder->getTimeStretch());
+}
+
+Napi::Value DecoderWrapper::GetWaveform(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        Napi::TypeError::New(env, "Expected number numPoints").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    
+    int numPoints = info[0].As<Napi::Number>().Int32Value();
+    FFmpegDecoder::WaveformData data = decoder->getWaveform(numPoints);
+    
+    Napi::Object result = Napi::Object::New(env);
+    
+    Napi::Float32Array peaksL = Napi::Float32Array::New(env, data.peaksL.size());
+    std::copy(data.peaksL.begin(), data.peaksL.end(), peaksL.Data());
+    
+    Napi::Float32Array peaksR = Napi::Float32Array::New(env, data.peaksR.size());
+    std::copy(data.peaksR.begin(), data.peaksR.end(), peaksR.Data());
+    
+    result.Set("peaksL", peaksL);
+    result.Set("peaksR", peaksR);
+    result.Set("points", Napi::Number::New(env, data.points));
+    
+    return result;
+}
+
+Napi::Value DecoderWrapper::GetWaveformStreaming(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    
+    if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsFunction()) {
+        Napi::TypeError::New(env, "Expected (numPoints: number, chunkSizeMB: number, callback: function)").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    
+    int numPoints = info[0].As<Napi::Number>().Int32Value();
+    int chunkSizeMB = info[1].As<Napi::Number>().Int32Value();
+    Napi::Function jsCallback = info[2].As<Napi::Function>();
+    
+    int64_t chunkSizeBytes = (int64_t)chunkSizeMB * 1024 * 1024;
+    
+    // Create C++ callback that invokes JS callback
+    auto callback = [&](const FFmpegDecoder::WaveformData& data, float progress) -> bool {
+        Napi::Object result = Napi::Object::New(env);
+        
+        Napi::Float32Array peaksL = Napi::Float32Array::New(env, data.peaksL.size());
+        std::copy(data.peaksL.begin(), data.peaksL.end(), peaksL.Data());
+        
+        Napi::Float32Array peaksR = Napi::Float32Array::New(env, data.peaksR.size());
+        std::copy(data.peaksR.begin(), data.peaksR.end(), peaksR.Data());
+        
+        result.Set("peaksL", peaksL);
+        result.Set("peaksR", peaksR);
+        result.Set("points", Napi::Number::New(env, data.points));
+        result.Set("progress", Napi::Number::New(env, progress));
+        
+        Napi::Value jsResult = jsCallback.Call({ result });
+        
+        // Return false to abort if callback returns false
+        if (jsResult.IsBoolean()) {
+            return jsResult.As<Napi::Boolean>().Value();
+        }
+        return true; // Continue by default
+    };
+    
+    FFmpegDecoder::WaveformData finalData = decoder->getWaveformStreaming(numPoints, chunkSizeBytes, callback);
+    
+    Napi::Object result = Napi::Object::New(env);
+    
+    Napi::Float32Array peaksL = Napi::Float32Array::New(env, finalData.peaksL.size());
+    std::copy(finalData.peaksL.begin(), finalData.peaksL.end(), peaksL.Data());
+    
+    Napi::Float32Array peaksR = Napi::Float32Array::New(env, finalData.peaksR.size());
+    std::copy(finalData.peaksR.begin(), finalData.peaksR.end(), peaksR.Data());
+    
+    result.Set("peaksL", peaksL);
+    result.Set("peaksR", peaksR);
+    result.Set("points", Napi::Number::New(env, finalData.points));
+    
+    return result;
 }
 
 static Napi::Value GetMetadata(const Napi::CallbackInfo& info) {

@@ -750,3 +750,152 @@ bool FFmpegDecoder::setTimeStretch(double rate) {
     closeFilters();
     return true;
 }
+
+FFmpegDecoder::WaveformData FFmpegDecoder::getWaveform(int numPoints) {
+    WaveformData data;
+    data.points = numPoints;
+    data.peaksL.resize(numPoints, 0.0f);
+    data.peaksR.resize(numPoints, 0.0f);
+
+    if (!formatCtx || audioStreamIndex < 0) return data;
+
+    // Save current position (in seconds)
+    double originalPos = 0.0;
+    AVStream* stream = formatCtx->streams[audioStreamIndex];
+    if (formatCtx->pb) {
+        // More reliable to track time than avio_tell for compressed streams
+        originalPos = 0.0; // We'll just seek back to 0 or leave it to the caller to seek back
+    }
+    
+    // Seek to beginning for analysis
+    seek(0);
+
+    const int64_t totalFrames = getTotalSamples();
+    const int64_t framesPerPoint = std::max((int64_t)1, totalFrames / numPoints);
+    
+    int currentPoint = 0;
+    int64_t pointFramesAccumulated = 0;
+    float maxL = 0.0f;
+    float maxR = 0.0f;
+
+    const int readBatchSize = 4096;
+    float batchBuffer[readBatchSize * 2]; // Stereo
+
+    while (currentPoint < numPoints) {
+        int readSamples = this->read(batchBuffer, readBatchSize * 2);
+        if (readSamples <= 0) break;
+
+        for (int i = 0; i < readSamples; i += 2) {
+            float l = std::abs(batchBuffer[i]);
+            float r = std::abs(batchBuffer[i+1]);
+            
+            if (l > maxL) maxL = l;
+            if (r > maxR) maxR = r;
+            
+            pointFramesAccumulated++;
+            
+            if (pointFramesAccumulated >= framesPerPoint) {
+                if (currentPoint < numPoints) {
+                    data.peaksL[currentPoint] = maxL;
+                    data.peaksR[currentPoint] = maxR;
+                    currentPoint++;
+                }
+                maxL = 0.0f;
+                maxR = 0.0f;
+                pointFramesAccumulated = 0;
+                
+                if (currentPoint >= numPoints) break;
+            }
+        }
+    }
+
+    // Handle last point if file ended early or rounding
+    if (currentPoint < numPoints && pointFramesAccumulated > 0) {
+        data.peaksL[currentPoint] = maxL;
+        data.peaksR[currentPoint] = maxR;
+    }
+
+    // Note: We don't seek back here because getWaveform is usually 
+    // destructive to the playback state anyway. The caller should seek if needed.
+
+    return data;
+}
+
+FFmpegDecoder::WaveformData FFmpegDecoder::getWaveformStreaming(int numPoints, int64_t chunkSizeBytes, ProgressCallback callback) {
+    WaveformData data;
+    data.points = numPoints;
+    data.peaksL.resize(numPoints, 0.0f);
+    data.peaksR.resize(numPoints, 0.0f);
+
+    if (!formatCtx || audioStreamIndex < 0) return data;
+
+    seek(0);
+
+    const int64_t totalFrames = getTotalSamples();
+    const int64_t framesPerPoint = std::max((int64_t)1, totalFrames / numPoints);
+    
+    int currentPoint = 0;
+    int64_t pointFramesAccumulated = 0;
+    int64_t bytesProcessed = 0;
+    int64_t nextCallbackAt = chunkSizeBytes;
+    float maxL = 0.0f;
+    float maxR = 0.0f;
+
+    const int readBatchSize = 4096;
+    float batchBuffer[readBatchSize * 2];
+    const int bytesPerSample = sizeof(float) * 2; // Stereo float32
+
+    while (currentPoint < numPoints) {
+        int readSamples = this->read(batchBuffer, readBatchSize * 2);
+        if (readSamples <= 0) break;
+
+        bytesProcessed += readSamples * sizeof(float);
+
+        for (int i = 0; i < readSamples; i += 2) {
+            float l = std::abs(batchBuffer[i]);
+            float r = std::abs(batchBuffer[i+1]);
+            
+            if (l > maxL) maxL = l;
+            if (r > maxR) maxR = r;
+            
+            pointFramesAccumulated++;
+            
+            if (pointFramesAccumulated >= framesPerPoint) {
+                if (currentPoint < numPoints) {
+                    data.peaksL[currentPoint] = maxL;
+                    data.peaksR[currentPoint] = maxR;
+                    currentPoint++;
+                }
+                maxL = 0.0f;
+                maxR = 0.0f;
+                pointFramesAccumulated = 0;
+                
+                if (currentPoint >= numPoints) break;
+            }
+        }
+
+        // Call callback every chunk
+        if (callback && bytesProcessed >= nextCallbackAt) {
+            float progress = (float)currentPoint / (float)numPoints;
+            bool shouldContinue = callback(data, progress);
+            if (!shouldContinue) {
+                // Abort requested
+                return data;
+            }
+            nextCallbackAt += chunkSizeBytes;
+        }
+    }
+
+    // Handle last point
+    if (currentPoint < numPoints && pointFramesAccumulated > 0) {
+        data.peaksL[currentPoint] = maxL;
+        data.peaksR[currentPoint] = maxR;
+    }
+
+    // Final callback
+    if (callback) {
+        callback(data, 1.0f);
+    }
+
+    return data;
+}

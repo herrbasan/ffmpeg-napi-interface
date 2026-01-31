@@ -56,7 +56,9 @@
                 "<(module_root_dir)/deps/win/bin/avcodec-62.dll",
                 "<(module_root_dir)/deps/win/bin/avutil-60.dll",
                 "<(module_root_dir)/deps/win/bin/swresample-6.dll",
-                "<(module_root_dir)/deps/win/bin/avfilter-11.dll"
+                "<(module_root_dir)/deps/win/bin/avfilter-11.dll",
+                "<(module_root_dir)/deps/win/bin/avdevice-62.dll",
+                "<(module_root_dir)/deps/win/bin/swscale-9.dll"
               ]
             }
           ]

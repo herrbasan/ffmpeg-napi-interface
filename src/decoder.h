@@ -13,6 +13,7 @@ extern "C" {
 
 #include <string>
 #include <vector>
+#include <functional>
 
 /**
  * FFmpegDecoder - High-performance audio decoder using FFmpeg libraries
@@ -123,6 +124,18 @@ public:
 
     AudioMetadata getMetadata() const;
     static AudioMetadata getFileMetadata(const char* filePath);
+    
+    struct WaveformData {
+        std::vector<float> peaksL;
+        std::vector<float> peaksR;
+        int points;
+    };
+
+    WaveformData getWaveform(int numPoints);
+    
+    // Streaming waveform with progress callback
+    typedef std::function<bool(const WaveformData&, float)> ProgressCallback;
+    WaveformData getWaveformStreaming(int numPoints, int64_t chunkSizeBytes, ProgressCallback callback);
     
     // Status
     bool isOpen() const { return formatCtx != nullptr; }
